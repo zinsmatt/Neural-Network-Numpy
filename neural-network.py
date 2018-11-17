@@ -23,15 +23,19 @@ def load_data():
                                                   random_state=None)
     return gq
 
+
 def sigmoid(x):
     return 1.0 / (1.0 + np.exp(-x))
+
     
 gaussian_quantiles = load_data()
 X, Y = gaussian_quantiles
 
 
+# Input Data
 plt.figure("Input Data")
 plt.scatter(X[:, 0], X[:, 1], c=Y, s=40, cmap=plt.cm.Spectral)
+
 
 
 def show_predictions(model, X, Y, name=""):
@@ -40,7 +44,7 @@ def show_predictions(model, X, Y, name=""):
     y_min, y_max = X[:, 1].min() - 1, X[:, 1].max() + 1
     xx, yy = np.meshgrid(np.arange(x_min, x_max, 0.01), np.arange(y_min, y_max, 0.01))
     X_temp = np.c_[xx.flatten(), yy.flatten()]
-    Z = clf.predict(X_temp)
+    Z = model.predict(X_temp)
     plt.figure("Predictions " + name)
     plt.contourf(xx, yy, Z.reshape(xx.shape), cmap=plt.cm.Spectral)
     plt.ylabel('x2')
@@ -60,72 +64,63 @@ print("Logistic Regression accuracy : ", np.sum(LR_predictions == Y) / Y.shape[0
 
 
 ## Neural Network
-
-
+class Neural_Network:
+    def __init__(self, n_in, n_hidden, n_out):
+        # Network dimensions
+        self.n_x = n_in
+        self.n_h = n_hidden
+        self.n_y = n_out
         
-n_x = X.shape[1]
-n_h = 4
-n_y = 1
+        # Parameters initialization
+        self.W1 = np.random.randn(self.n_h, self.n_x) * 0.01
+        self.b1 = np.zeros((self.n_h, 1))
+        self.W2 = np.random.randn(self.n_y, self.n_h) * 0.01
+        self.b2 = np.zeros((self.n_y, 1))
 
-W1 = np.random.randn(n_h, n_x) * 0.01
-b1 = np.zeros((n_h, 1))
-W2 = np.random.randn(n_y, n_h) * 0.01
-b2 = np.zeros((n_y, 1))
+    def forward(self, X):
+        """ Forward computation """
+        self.Z1 = self.W1.dot(X.T) + self.b1
+        self.A1 = np.tanh(self.Z1)
+        self.Z2 = self.W2.dot(self.A1) + self.b2
+        self.A2 = sigmoid(self.Z2)
+    
+    def back_prop(self,  X, Y):
+        """ Back-progagate gradient of the loss """
+        m = X.shape[0]
+        self.dZ2 = self.A2 - Y
+        self.dW2 = (1 / m) * np.dot(self.dZ2, self.A1.T)
+        self.db2 = (1 / m) * np.sum(self.dZ2, axis=1, keepdims=True)
+        self.dZ1 = np.multiply(np.dot(self.W2.T, self.dZ2), 1 - np.power(self.A1, 2))
+        self.dW1 = (1 / m) * np.dot(self.dZ1, X)
+        self.db1 = (1 / m) * np.sum(self.dZ1, axis=1, keepdims=True)
+
+    def train(self, X, Y, epochs, learning_rate=1.2):
+        """ Complete process of learning, alternates forward pass,
+            backward pass and parameters update """
+        m = X.shape[0]
+        for e in range(epochs):
+            self.forward(X)
+            loss = -np.sum(np.multiply(np.log(self.A2), Y) + np.multiply(np.log(1-self.A2),  (1 - Y))) / m
+            self.back_prop(X, Y)
+
+            self.W1 -= learning_rate * self.dW1
+            self.b1 -= learning_rate * self.db1
+            self.W2 -= learning_rate * self.dW2
+            self.b2 -= learning_rate * self.db2
+
+            if e % 1000 == 0:
+                print("Loss ",  e, " = ", loss)
+
+    def predict(self, X):
+        """ Compute predictions with just a forward pass """
+        self.forward(X)
+        return np.round(self.A2).astype(np.int)
 
 
-for i in range(5000):
-    # Forward
-    Z1 = W1.dot(X.T) + b1
-    A1 = np.tanh(Z1)
-    Z2 = W2.dot(A1) + b2
-    A2 = sigmoid(Z2)
-    
-    
-    m = X.shape[0]
-    loss = -np.sum(np.multiply(np.log(A2), Y) + np.multiply(np.log(1-A2),  (1 - Y))) / m
-    
-    
-    dZ2 = A2 - Y
-    dW2 = (1 / m) * np.dot(dZ2, A1.T)
-    db2 = (1 / m) * np.sum(dZ2, axis=1, keepdims=True)
-    dZ1 = np.multiply(np.dot(W2.T, dZ2), 1 - np.power(A1, 2))
-    dW1 = (1 / m) * np.dot(dZ1, X)
-    db1 = (1 / m) * np.sum(dZ1, axis=1, keepdims=True)
-    
-    
-    rate = 1.2
-    
-    W1 -= rate * dW1
-    b1 -= rate * db1
-    W2 -= rate * dW2
-    b2 -= rate * db2
-    
-    if i % 1000 == 0:
-        print("Loss ",  i, " = ", loss)
-    
+nn = Neural_Network(2, 10, 1)
+nn.train(X, Y, 5000, 1.2)
 
-def nn_predict(X):
-    # Prediction
-    Z1 = W1.dot(X.T) + b1
-    A1 = np.tanh(Z1)
-    Z2 = W2.dot(A1) + b2
-    A2 = sigmoid(Z2)
-    return np.round(A2).astype(np.int)
+show_predictions(nn, X, Y, "Neural Network")
 
-nn_predictions = nn_predict(X)
+nn_predictions = nn.predict(X)
 print("Neural Network accuracy : ", np.sum(nn_predictions == Y) / Y.shape[0])
-
-x_min, x_max = X[:, 0].min() - 1, X[:, 0].max() + 1
-y_min, y_max = X[:, 1].min() - 1, X[:, 1].max() + 1
-xx, yy = np.meshgrid(np.arange(x_min, x_max, 0.01), np.arange(y_min, y_max, 0.01))
-
-X_temp = np.c_[xx.flatten(), yy.flatten()]
-
-Z = nn_predict(X_temp)
-
-plt.figure("Neural Network")
-plt.contourf(xx, yy, Z.reshape(xx.shape), cmap=plt.cm.Spectral)
-plt.ylabel('x2')
-plt.xlabel('x1')
-plt.scatter(X[:, 0], X[:, 1],c=Y, s=40, cmap=plt.cm.Spectral)
-    
